@@ -1,0 +1,7 @@
+mss
+google-generativeai
+requests
+schedule
+python-dotenv
+rumps
+Pillow
