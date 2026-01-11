@@ -19,6 +19,14 @@ data/
 .LSOverride
 ._*
 
+
 # IDE
 .vscode/
 .idea/
+
+# Build and Distribution
+build/
+dist/
+*.app
+*.egg-info/
+*.spec

@@ -25,7 +25,7 @@ class NanobananaClient:
             logger.info(f"Generating diagram with model: {self.model_name}")
             model = genai.GenerativeModel(self.model_name)
             
-            prompt = f"以下の日報の内容を要約した、分かりやすい図解（インフォグラフィック）画像を生成してください。対応した「案件名」「対応内容概要」「対応内容詳細」「対応時間」を軸にまとめて。テキストは日本語でお願いします。\n\n{text_summary}"
+            prompt = f"以下の日報の内容を要約した、分かりやすい図解（インフォグラフィック）画像を生成してください。対応した「案件名」「対応内容概要」「対応内容詳細」「対応時間」を軸にまとめて。テキストは日本語でお願いします。最後に文字を清書するように再生成してください。文字以外の要素は変更禁止です。\n\n{text_summary}"
             
             # Call API
             response = model.generate_content(prompt)

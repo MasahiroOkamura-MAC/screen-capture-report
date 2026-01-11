@@ -1,34 +1,18 @@
 #!/bin/bash
 
 APP_NAME="ScreenCaptureReport"
-APP_DIR="${APP_NAME}.app"
 ICON_SOURCE="app_icon.png"
 ICON_SET="app_icon.iconset"
-SCRIPT_SOURCE="launcher.applescript"
 
 echo "Building ${APP_NAME}..."
 
-# 1. Clean up
-if [ -d "$APP_DIR" ]; then
-    rm -rf "$APP_DIR"
-fi
+# 1. Clean up old builds
+rm -rf build dist
 
-# 2. Compile AppleScript (Creates the App Bundle)
-echo "Compiling AppleScript..."
-osacompile -s -o "$APP_DIR" "$SCRIPT_SOURCE"
-
-if [ ! -d "$APP_DIR" ]; then
-    echo "Error: Failed to create app."
-    exit 1
-fi
-
-# 3. Handle Icons
+# 2. Handle Icons for py2app (It needs .icns file)
 if [ -f "$ICON_SOURCE" ]; then
     echo "Creating icons..."
     mkdir -p "$ICON_SET"
-    
-    # helper for sips
-    # sips -z H W -s format png input --out output
     
     sips -z 16 16     -s format png "$ICON_SOURCE" --out "${ICON_SET}/icon_16x16.png"
     sips -z 32 32     -s format png "$ICON_SOURCE" --out "${ICON_SET}/icon_16x16@2x.png"
@@ -41,21 +25,24 @@ if [ -f "$ICON_SOURCE" ]; then
     sips -z 512 512   -s format png "$ICON_SOURCE" --out "${ICON_SET}/icon_512x512.png"
     sips -z 1024 1024 -s format png "$ICON_SOURCE" --out "${ICON_SET}/icon_512x512@2x.png"
 
-    # iconutil works on the directory
     echo "Converting to icns..."
-    if iconutil -c icns "$ICON_SET" -o "$APP_DIR/Contents/Resources/applet.icns"; then
-        echo "Icon applied successfully."
-    else 
-        echo "Warning: Icon generation failed."
-    fi
+    iconutil -c icns "$ICON_SET" -o "app_icon.icns"
     
     rm -rf "$ICON_SET"
 else
     echo "Warning: No icon found at $ICON_SOURCE"
 fi
 
-# 4. Update Info.plist if needed (osacompile sets it up for applet)
-# We can just leave it as is, or modify LSUIElement if we want to hide it later. 
-# For now, standard applet behavior is fine.
+# 3. Build with py2app
+# We use alias mode (-A) for dev speed, or full build without it.
+# For distribution/reliability, let's do a full build (no -A) to ensure all libs are packed.
+# However, -A is faster for iterating.
+# Given the user wants to solve permission issues, a full build is cleaner as it isolates the env.
 
-echo "Done! ${APP_NAME} is ready."
+echo "Running py2app..."
+python setup.py py2app
+
+# 4. Cleanup
+# rm app_icon.icns (Keep it maybe?)
+
+echo "Done! App is in ./dist/${APP_NAME}.app"

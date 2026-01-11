@@ -16,6 +16,18 @@ class GeminiAnalyzer:
             model_name = get_config("ANALYSIS_MODEL_NAME", "gemini-1.5-flash")
             self.model = genai.GenerativeModel(model_name)
 
+    def reload_config(self):
+        """Reloads configuration (e.g. after setup)."""
+        logger.info("Reloading Analyzer config...")
+        api_key = get_config("GEMINI_API_KEY")
+        if api_key:
+             genai.configure(api_key=api_key)
+             model_name = get_config("ANALYSIS_MODEL_NAME", "gemini-1.5-flash")
+             self.model = genai.GenerativeModel(model_name)
+             logger.info(f"Analyzer reloaded with model: {model_name}")
+        else:
+             logger.warning("Analyzer reload failed: API Key missing.")
+
     def analyze_batch(self, image_paths, current_log=""):
         """Analyzes a batch of images and updates the daily report."""
         if not self.model:
@@ -42,7 +54,8 @@ class GeminiAnalyzer:
 """
             
             response = self.model.generate_content([prompt] + images)
-            logger.info("Gemini analysis completed.")
+            logger.info(f"Gemini analysis completed. Response length: {len(response.text)}")
+            logger.debug(f"Response: {response.text}")
             return response.text
         except Exception as e:
             logger.error(f"Error during Gemini analysis: {e}")

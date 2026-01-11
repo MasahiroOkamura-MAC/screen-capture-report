@@ -5,3 +5,5 @@ schedule
 python-dotenv
 rumps
 Pillow
+pyobjc-framework-Quartz
+py2app

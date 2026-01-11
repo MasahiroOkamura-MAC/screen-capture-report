@@ -1,84 +1,73 @@
 import mss
 import mss.tools
 import os
-import subprocess
+import Quartz
+from Cocoa import NSWorkspace
 from datetime import datetime
 from PIL import Image
-from src.utils import setup_logger, get_config
+from src.utils import setup_logger, get_config, get_data_dir
 
 logger = setup_logger(__name__)
 
 class ScreenCapturer:
-    def __init__(self, output_dir="data/captures"):
-        self.output_dir = output_dir
+    def __init__(self, output_dir=None):
+        if output_dir is None:
+            self.output_dir = os.path.join(get_data_dir(), "data", "captures")
+        else:
+            self.output_dir = output_dir
+            
         self.capture_count = 0
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
     def get_active_window_bounds(self):
         """
-        Returns the bounds of the active window (left, top, width, height).
-        Requires Accessibility permissions for the terminal/app.
+        Returns the bounds of the active window (left, top, width, height) using Quartz/Cocoa.
         """
-        script = '''
-        tell application "System Events"
-            set frontApp to first application process whose frontmost is true
-            set frontAppName to name of frontApp
-            
-            tell frontApp
-                set allWindows to every window
-                set maxArea to 0
-                set targetWindow to missing value
-                
-                repeat with w in allWindows
-                    try
-                        set {w_width, w_height} to size of w
-                        set area to w_width * w_height
-                        if area > maxArea then
-                            set maxArea to area
-                            set targetWindow to w
-                        end if
-                    end try
-                end repeat
-                
-                if targetWindow is not missing value then
-                    set windowTitle to name of targetWindow
-                    set {x, y} to position of targetWindow
-                    set {w, h} to size of targetWindow
-                    return {frontAppName, windowTitle, x, y, w, h}
-                else
-                    return "No Window"
-                end if
-            end tell
-        end tell
-        '''
         try:
-            p = subprocess.Popen(['osascript', '-e', script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            output, error = p.communicate(timeout=2)
-            
-            if error:
-                if "not allowed assistive access" in error or "-1719" in error or "-25211" in error:
-                    logger.warning("Accessibility permission denied. Cannot get active window bounds. Falling back to full screen.")
-                else:
-                    logger.warning(f"AppleScript error: {error.strip()}")
+            # Get the frontmost application
+            active_app = NSWorkspace.sharedWorkspace().frontmostApplication()
+            if not active_app:
+                logger.warning("Could not determine frontmost application.")
                 return None
+                
+            pid = active_app.processIdentifier()
+            app_name = active_app.localizedName()
             
-            if output.strip():
-                # Output format: "AppName, WindowTitle, x, y, w, h"
-                parts = output.strip().split(', ')
-                if len(parts) >= 6:
-                    app_name = parts[0]
-                    window_title = parts[1]
-                    # Handle potential commas in titles by taking the last 4 elements as bounds
-                    bounds_parts = parts[-4:]
-                    x, y, w, h = [int(val) for val in bounds_parts]
-                    
-                    logger.info(f"Targeting Active Window: App='{app_name}', Title='{window_title}', Bounds=(x={x}, y={y}, w={w}, h={h})")
-                    return {'left': x, 'top': y, 'width': w, 'height': h}
+            # Get list of windows on screen
+            options = Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements
+            window_list = Quartz.CGWindowListCopyWindowInfo(options, Quartz.kCGNullWindowID)
+            
+            # Find the first window that belongs to the active app
+            # usage of kCGWindowLayer == 0 helps filter out overlays, menus, etc.
+            for window in window_list:
+                if window.get('kCGWindowOwnerPID') == pid:
+                    # Default windows are at layer 0. 
+                    # Some apps might use different layers, but 0 is standard for the main window.
+                    if window.get('kCGWindowLayer', 0) == 0:
+                        bounds = window.get('kCGWindowBounds')
+                        
+                        # Filter out tiny windows (tooltips, hidden windows)
+                        w = int(bounds['Width'])
+                        h = int(bounds['Height'])
+                        
+                        if w < 50 or h < 50:
+                            continue
+                            
+                        x = int(bounds['X'])
+                        y = int(bounds['Y'])
+                        
+                        window_title = window.get('kCGWindowName', '')
+                        
+                        logger.info(f"Targeting Active Window (Quartz): App='{app_name}', Title='{window_title}', Bounds=(x={x}, y={y}, w={w}, h={h})")
+                        return {'left': x, 'top': y, 'width': w, 'height': h}
+            
+            logger.warning(f"No suitable window found for active app: {app_name} (PID: {pid})")
+            return None
+
         except Exception as e:
-            logger.error(f"Failed to get active window bounds: {e}")
-        
-        return None
+            logger.error(f"Failed to get active window bounds via Quartz: {e}")
+            return None
 
     def capture(self):
         """Captures the screen based on configuration."""
